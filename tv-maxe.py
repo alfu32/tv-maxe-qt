@@ -7,6 +7,7 @@ from PyQt5.QtGui import QIcon, QPixmap
 import icons_rc
 from listManager import ListManager
 from videoManager import VideoManager
+from settingsManager import SettingsManager
 from mediaProxy import MediaProxy
 from tvmxutils import PLAYERSTATE_STOPPED, PLAYERSTATE_PLAYING
 from tvmxutils import PLAYERSTATE_PAUSED
@@ -25,7 +26,9 @@ class TVMaxe(QtWidgets.QMainWindow):
         self.mediaProxy.bufferProgress.connect(self.updateProgress)
 
         # configure the UI
+        settings = SettingsManager()
         self.window.statusbar.hide()
+        self.window.filterWidget.hide()
         self.window.bottomLayout.addWidget(QtWidgets.QSizeGrip(self.window))
         self.window.progressBar.hide()
         self.window.playPauseBtn.clicked.connect(self.playPause)
@@ -33,7 +36,14 @@ class TVMaxe(QtWidgets.QMainWindow):
         self.window.fullscreenBtn.clicked.connect(self.switchFullscreen)
         self.window.volumeSlider.valueChanged.connect(
             self.videoManager.setVolume)
-        self.window.splitter.setSizes([229, 475])
+        self.window.splitter.setSizes(
+            list(map(int, settings.value("splitterSize", [229, 475]))))
+        self.window.resize(
+            settings.value("windowSize", QtCore.QSize(838, 553)))
+        self.window.move(
+            settings.value("windowPos", QtCore.QPoint(20, 20)))
+        self.window.volumeSlider.setValue(
+            int(settings.value("volume", 50)))
         self.window.splitter.setStretchFactor(1, 1)
         self.window.show()
 
@@ -62,6 +72,13 @@ class TVMaxe(QtWidgets.QMainWindow):
     def playerStateChanged(self, state):
         if state == PLAYERSTATE_PLAYING:
             self.window.progressBar.hide()
+            lastItem = self.listManager.lastItem
+            values = self.videoManager.getGlobalEqValues()
+            if lastItem:
+                values = self.videoManager.getEqValuesForChannel(lastItem.chid)
+            self.videoManager.eqChanged(values)
+            self.videoManager.aspectChanged(int(values['aspect']))
+            self.videoManager.setVolume(self.window.volumeSlider.value())
             self.window.playPauseBtn.setIcon(
                 QIcon(QPixmap(":/ico/icons/media-playback-pause.png")))
         elif state == PLAYERSTATE_STOPPED:
@@ -74,7 +91,7 @@ class TVMaxe(QtWidgets.QMainWindow):
     def playVideo(self, url):
         if self.videoManager.mediaPlayer.state() == PLAYERSTATE_STOPPED:
             self.videoManager.playVideo(url)
-            self.videoManager.setVolume(self.window.volumeSlider.value())
+        self.videoManager.setVolume(self.window.volumeSlider.value())
 
     def playPause(self):
         if self.videoManager.mediaPlayer.state() == PLAYERSTATE_PLAYING:
@@ -90,10 +107,17 @@ class TVMaxe(QtWidgets.QMainWindow):
         self.videoManager.switchFullscreen(event)
 
     def closeEvent(self, event):
+        settings = SettingsManager()
+        settings.setValue("splitterSize", self.window.splitter.sizes())
+        settings.setValue("windowSize", self.window.size())
+        settings.setValue("windowPos", self.window.pos())
+        settings.setValue("volume", self.window.volumeSlider.value())
         self.stop()
 
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
     app = QtWidgets.QApplication(sys.argv)
+    app.setApplicationName("TV-Maxe")
+    app.setOrganizationName("Ovidiu Nitan")
     tvmaxe = TVMaxe()
     sys.exit(app.exec_())

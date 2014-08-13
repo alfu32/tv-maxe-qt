@@ -1,0 +1,6 @@
+[submodule "mplayer.py"]
+	path = mplayer.py
+	url = https://github.com/baudm/mplayer.py.git
+[submodule "players/mplayer.py"]
+	path = players/mplayer.py
+	url = https://github.com/baudm/mplayer.py.git

@@ -9,25 +9,24 @@ from tvmxutils import PLAYERSTATE_PAUSED
 class VLCPlayer(QObject):
     stateChanged = pyqtSignal(int)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, xid, *args, **kwargs):
         QObject.__init__(self, *args, **kwargs)
         Instance = vlc.Instance()
         self.mp = vlc.MediaPlayer(Instance)
+        self.mp.set_xwindow(xid)
+        self.mp.video_set_mouse_input(False)
+        self.mp.video_set_key_input(False)
         self.evm = self.mp.event_manager()
         self.evm.event_attach(vlc.EventType.MediaPlayerStopped, self.callback, None)
         self.evm.event_attach(vlc.EventType.MediaPlayerPlaying, self.callback, None)
         self.evm.event_attach(vlc.EventType.MediaPlayerPaused, self.callback, None)
+        self.evm.event_attach(vlc.EventType.MediaPlayerVout, self.callback, None)
         self.evm.event_attach(
             vlc.EventType.MediaPlayerTimeChanged, self.force_volume, None)
         self.volume = 0
 
-    def setMedia(self, url):
-        self.mp.video_set_mouse_input(False)
-        self.mp.video_set_key_input(False)
+    def play(self, url):
         self.mp.set_mrl(url)
-
-    def play(self, xid):
-        self.mp.set_xwindow(xid)
         self.mp.play()
 
     def pause(self):
@@ -39,7 +38,7 @@ class VLCPlayer(QObject):
     def stop(self):
         self.mp.stop()
 
-    def setVolume(self, value=None):
+    def setVolume(self, value):
         self.volume = value
         self.mp.audio_set_volume(value)
 
@@ -58,10 +57,29 @@ class VLCPlayer(QObject):
             pass
 
     def setRatio(self, ratio):
-        if ratio == "Auto":
+        if ratio == 0:
             ratio = None
+        elif ratio == 1:
+            ratio = '1:1'
+        elif ratio == 2:
+            ratio = '3:2'
+        elif ratio == 3:
+            ratio = '4:3'
+        elif ratio == 4:
+            ratio = '5:4'
+        elif ratio == 5:
+            ratio = '14:9'
+        elif ratio == 6:
+            ratio = '14:10'
+        elif ratio == 7:
+            ratio = '16:9'
+        elif ratio == 8:
+            ratio = '16:10'
+        elif ratio == 9:
+            ratio = '2.35:1'
         self.mp.video_set_aspect_ratio(ratio)
 
+    """ NOT YET SUPPORTED
     def getTags(self):
         tags = ['', '']
         media = self.mp.get_media()
@@ -73,11 +91,11 @@ class VLCPlayer(QObject):
             tags[1] = title
         return tags
 
-        def isPlaying(self):
-            return self.mprunning
+    def isPlaying(self):
+        return self.mprunning
 
-        def changeAudio(self, id):
-            self.mp.audio_set_track(int(id))
+    def changeAudio(self, id):
+        self.mp.audio_set_track(int(id))"""
 
     def state(self):
         state = self.mp.get_state()

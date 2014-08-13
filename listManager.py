@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QUrl, QObject, Qt, QSize, pyqtSignal
+from PyQt5.QtCore import *
 from PyQt5.QtNetwork import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -9,6 +9,7 @@ import json
 import base64
 
 import settingsManager
+from channelInfo import ChannelInfo
 from appdirs import *
 
 
@@ -62,8 +63,19 @@ class ListManager(QObject):
         self.listWidget = listWidget
         self.listWidget.customContextMenuRequested.connect(self.showContextMenu)
         self.settingsManager = settingsManager.SettingsManager()
+        self.lastItem = None
 
         self.listWidget.itemActivated.connect(self.playCurrentChannel)
+
+    def _iterAllItems(self):
+        for i in range(self.listWidget.count()):
+            yield self.listWidget.item(i)
+
+    def channelItemByURL(self, url):
+        for item in self._iterAllItems():
+            if url in item.urls:
+                return item
+        return None
 
     def showContextMenu(self, pos):
         item = self.listWidget.currentItem()
@@ -73,21 +85,34 @@ class ListManager(QObject):
         contextMenu = QMenu(self.listWidget)
         contextMenu.addAction(playAction)
         if len(item.urls) > 1:
-            submenu = contextMenu.addMenu("Select stream")
+            playSubmenu = contextMenu.addMenu("Select stream")
+            index = 0
             for url in item.urls:
                 submenuAction = QAction(url, contextMenu)
-                submenuAction.triggered.connect(self.playURL(url))
-                submenu.addAction(submenuAction)
+                submenuAction.triggered.connect(
+                    self.playChannelIndex(item, index))
+                playSubmenu.addAction(submenuAction)
+                index += 1
+            recordSubmenu = contextMenu.addMenu("Record stream")
+            for url in item.urls:
+                submenuAction = QAction(url, contextMenu)
+                submenuAction.triggered.connect(
+                    self.playChannelIndex(item, index))
+                recordSubmenu.addAction(submenuAction)
+                index += 1
+        else:
+            recordAction = QAction("Record", self.listWidget)
+            contextMenu.addAction(recordAction)
         contextMenu.addSeparator()
         contextMenu.addAction(QAction("Channel info", self.listWidget))
         contextMenu.addAction(QAction("Edit channel", self.listWidget))
-        contextMenu.addAction(QAction("Remove channel", self.listWidget))
+        contextMenu.addAction(QAction("Delete channel", self.listWidget))
         contextMenu.addSeparator()
         contextMenu.addAction(QAction("TV Guide", self.listWidget))
         contextMenu.popup(self.listWidget.viewport().mapToGlobal(pos))
 
     def getChannelLists(self):
-        for sub in self.settingsManager.subscriptions:
+        for sub in self.settingsManager.value("subscriptions"):
             if sub[0] == 1:
                 self.getList(sub[1])
 
@@ -99,8 +124,12 @@ class ListManager(QObject):
         self.dmanager.get(request)
 
     def listDownloaded(self, reply):
+        cachedir = QStandardPaths.writableLocation(
+            QStandardPaths.CacheLocation)
+        if not os.path.exists(cachedir):
+            os.makedirs(cachedir)
         fname = re.sub(r'\W+', '', reply.url().path())
-        fname = "{0}/{1}".format(settingsManager.USER_DATA_DIR, fname)
+        fname = "{0}/{1}".format(cachedir, fname)
 
         fh = open(fname, 'wb')
         fh.write(reply.readAll())
@@ -118,12 +147,13 @@ class ListManager(QObject):
             self.listWidget.setItemWidget(chItem, chItem.widget)
         self.listWidget.sortItems(Qt.AscendingOrder)
 
-    def playCurrentChannel(self, item=None):
+    def playCurrentChannel(self, item=None, index=0):
         if not item:
             item = self.listWidget.currentItem()
-        self.playUrl.emit(QUrl(item.urls[0]))
+        self.lastItem = item
+        self.playUrl.emit(QUrl(item.urls[index]))
 
-    def playURL(self, url):
-        def playSelectedURL(checked):
-            self.playUrl.emit(QUrl(url))
-        return playSelectedURL
+    def playChannelIndex(self, item=None, index=0):
+        def playSelectedIndex(checked):
+            self.playCurrentChannel(item, index)
+        return playSelectedIndex
