@@ -124,28 +124,33 @@ class ListManager(QObject):
         self.dmanager.get(request)
 
     def listDownloaded(self, reply):
-        cachedir = QStandardPaths.writableLocation(
-            QStandardPaths.CacheLocation)
-        if not os.path.exists(cachedir):
-            os.makedirs(cachedir)
-        fname = re.sub(r'\W+', '', reply.url().path())
-        fname = "{0}/{1}".format(cachedir, fname)
+        if reply.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 200:
+            cachedir = QStandardPaths.writableLocation(
+                QStandardPaths.CacheLocation)
+            if not os.path.exists(cachedir):
+                os.makedirs(cachedir)
+            fname = re.sub(r'\W+', '', reply.url().path())
+            fname = "{0}/{1}".format(cachedir, fname)
 
-        fh = open(fname, 'wb')
-        fh.write(reply.readAll())
-        fh.close()
+            fh = open(fname, 'wb')
+            fh.write(reply.readAll())
+            fh.close()
 
-        conn = sqlite3.connect(fname)
-        conn.row_factory = sqlite3.Row
-        conn.text_factory = str
-        data = conn.cursor()
-
-        rows = data.execute("SELECT * FROM tv_channels")
-        for row in rows:
-            chItem = ChannelItem(row)
-            self.listWidget.addItem(chItem)
-            self.listWidget.setItemWidget(chItem, chItem.widget)
-        self.listWidget.sortItems(Qt.AscendingOrder)
+            conn = sqlite3.connect(fname)
+            conn.row_factory = sqlite3.Row
+            conn.text_factory = str
+            data = conn.cursor()
+            
+            rows = data.execute("SELECT * FROM tv_channels")
+            for row in rows:
+                chItem = ChannelItem(row)
+                self.listWidget.addItem(chItem)
+                self.listWidget.setItemWidget(chItem, chItem.widget)
+            self.listWidget.sortItems(Qt.AscendingOrder)
+        elif reply.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 301:
+            self.getList(reply.attribute(QNetworkRequest.RedirectionTargetAttribute))
+        else:
+            qCritical("Couldn't download playlist at {0}".format(reply.url()))
 
     def playCurrentChannel(self, item=None, index=0):
         if not item:
